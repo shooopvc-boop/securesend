@@ -61,16 +61,20 @@
     word-break: break-all;
   }
 
+  textarea.scrambling {
+    color: #52525b;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    word-break: break-all;
+    transition: color 0.6s ease;
+  }
+
   .buttons {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
     gap: 0.5rem;
     margin-top: 0.75rem;
     height: 40px;
-  }
-
-  .buttons.split {
-    grid-template-columns: 1fr 1fr;
   }
 
   button {
@@ -85,7 +89,7 @@
     cursor: pointer;
     -webkit-appearance: none;
     appearance: none;
-    transition: all 0.15s ease;
+    transition: opacity 0.35s ease, border-color 0.15s ease, color 0.15s ease, background 0.15s ease, transform 0.15s ease;
     color: #fafafa;
   }
 
@@ -94,23 +98,37 @@
   #encryptBtn {
     background: #3f3f46;
     color: #d4d4d8;
-    flex: 1;
+    grid-column: 1 / -1;
+    grid-row: 1;
   }
 
   #encryptBtn:hover {
     background: #52525b;
   }
 
+  #copyBtn {
+    grid-row: 1;
+    grid-column: 1;
+  }
+
+  #resetBtn {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
   #copyBtn, #resetBtn {
-    display: none;
+    opacity: 0;
+    pointer-events: none;
   }
 
   #copyBtn.visible, #resetBtn.visible {
-    display: block;
+    opacity: 1;
+    pointer-events: auto;
   }
 
   #encryptBtn.hidden {
-    display: none;
+    opacity: 0;
+    pointer-events: none;
   }
 
   #copyBtn {
@@ -205,23 +223,66 @@ const input = document.getElementById('input');
 const encryptBtn = document.getElementById('encryptBtn');
 const copyBtn = document.getElementById('copyBtn');
 const resetBtn = document.getElementById('resetBtn');
-const buttons = document.querySelector('.buttons');
+
+function scrambleTo(target, callback) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+  const len = target.length;
+  const resolved = new Array(len).fill(false);
+  let current = new Array(len).fill(null).map(() => chars[Math.floor(Math.random() * chars.length)]);
+
+  input.readOnly = true;
+  input.classList.add('scrambling');
+  input.value = current.join('');
+
+  const duration = 1200;
+  const tickInterval = 30;
+  const start = performance.now();
+
+  const timer = setInterval(() => {
+    const elapsed = performance.now() - start;
+    const progress = Math.min(elapsed / duration, 1);
+
+    // Characters resolve left-to-right with a wave
+    const resolveUpTo = Math.floor(progress * len * 1.2);
+
+    for (let i = 0; i < len; i++) {
+      if (resolved[i]) continue;
+      if (i < resolveUpTo) {
+        current[i] = target[i];
+        resolved[i] = true;
+      } else {
+        current[i] = chars[Math.floor(Math.random() * chars.length)];
+      }
+    }
+
+    input.value = current.join('');
+
+    if (progress >= 1) {
+      clearInterval(timer);
+      input.value = target;
+      input.classList.remove('scrambling');
+      input.classList.add('encrypted');
+      callback();
+    }
+  }, tickInterval);
+}
 
 encryptBtn.addEventListener('click', async () => {
   const text = input.value.trim();
   if (!text) return;
 
+  encryptBtn.disabled = true;
+
   try {
     const encrypted = await encrypt(text);
-    input.value = encrypted;
-    input.classList.add('encrypted');
-    input.readOnly = true;
 
-    encryptBtn.classList.add('hidden');
-    copyBtn.classList.add('visible');
-    resetBtn.classList.add('visible');
-    buttons.classList.add('split');
+    scrambleTo(encrypted, () => {
+      encryptBtn.classList.add('hidden');
+      copyBtn.classList.add('visible');
+      resetBtn.classList.add('visible');
+    });
   } catch (e) {
+    encryptBtn.disabled = false;
     alert('Encryption failed. Is the public key set?');
     console.error(e);
   }
@@ -245,7 +306,7 @@ resetBtn.addEventListener('click', () => {
   copyBtn.classList.remove('visible');
   resetBtn.classList.remove('visible');
   encryptBtn.classList.remove('hidden');
-  buttons.classList.remove('split');
+  encryptBtn.disabled = false;
 });
 </script>
 </body>
