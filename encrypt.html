@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecureSend</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #09090b;
+    color: #a1a1aa;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 1.5rem;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 560px;
+  }
+
+  h1 {
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 1.25rem;
+    color: #a1a1aa;
+  }
+
+  textarea {
+    display: block;
+    width: 100%;
+    height: 240px;
+    background: transparent;
+    border: 1px solid #3f3f46;
+    border-radius: 4px;
+    color: #fafafa;
+    font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.85rem;
+    line-height: 1.7;
+    padding: 1.25rem;
+    resize: none;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+    transition: border-color 0.25s ease;
+  }
+
+  textarea::placeholder { color: #71717a; }
+  textarea:focus { border-color: #52525b; }
+
+  textarea.encrypted {
+    color: #71717a;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    word-break: break-all;
+  }
+
+  .buttons {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    height: 40px;
+  }
+
+  .buttons.split {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  button {
+    width: 100%;
+    height: 40px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    transition: all 0.15s ease;
+    color: #fafafa;
+  }
+
+  button:active { transform: scale(0.98); }
+
+  #encryptBtn {
+    background: #3f3f46;
+    color: #d4d4d8;
+    flex: 1;
+  }
+
+  #encryptBtn:hover {
+    background: #52525b;
+  }
+
+  #copyBtn, #resetBtn {
+    display: none;
+  }
+
+  #copyBtn.visible, #resetBtn.visible {
+    display: block;
+  }
+
+  #encryptBtn.hidden {
+    display: none;
+  }
+
+  #copyBtn {
+    background: transparent;
+    border-color: #3f3f46;
+    color: #d4d4d8;
+  }
+  #copyBtn:hover {
+    border-color: #52525b;
+    color: #fafafa;
+  }
+  #copyBtn.copied {
+    border-color: #3f3f46;
+    color: #71717a;
+  }
+
+  #resetBtn {
+    background: transparent;
+    border-color: #3f3f46;
+    color: #d4d4d8;
+  }
+  #resetBtn:hover {
+    border-color: #52525b;
+    color: #fafafa;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Shooop SecureSend</h1>
+  <textarea id="input" placeholder="Type or paste your message here..."></textarea>
+  <div class="buttons">
+    <button id="encryptBtn">Encrypt</button>
+    <button id="copyBtn">Copy</button>
+    <button id="resetBtn">Reset</button>
+  </div>
+</div>
+
+<script>
+const PUBLIC_KEY_PEM = `
+-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAER5ZyS0ArFBKz1Ijga1dioPZTw8SP
+UoSu4lMcSLdGM6aCb6tSl8jlxXWrlalB6qoQo9T/jWsqLDLdpjahYwinBg==
+-----END PUBLIC KEY-----
+`.trim();
+
+function pemToArrayBuffer(pem) {
+  const b64 = pem.replace(/-----[^-]+-----/g, '').replace(/\s/g, '');
+  const bin = atob(b64);
+  const buf = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  return buf.buffer;
+}
+
+async function importPublicKey() {
+  const der = pemToArrayBuffer(PUBLIC_KEY_PEM);
+  return crypto.subtle.importKey('spki', der, { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+}
+
+async function deriveAesKey(privateKey, publicKey) {
+  const shared = await crypto.subtle.deriveBits({ name: 'ECDH', public: publicKey }, privateKey, 256);
+  return crypto.subtle.importKey('raw', shared, { name: 'AES-GCM' }, false, ['encrypt']);
+}
+
+async function encrypt(plaintext) {
+  const recipientPubKey = await importPublicKey();
+  const encoded = new TextEncoder().encode(plaintext);
+
+  // Generate ephemeral EC key pair
+  const ephemeral = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
+
+  // Derive AES-256 key from ECDH shared secret
+  const aesKey = await deriveAesKey(ephemeral.privateKey, recipientPubKey);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+
+  // Encrypt data with AES-GCM
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aesKey, encoded);
+
+  // Export ephemeral public key (raw, 65 bytes for P-256 uncompressed)
+  const ephPub = new Uint8Array(await crypto.subtle.exportKey('raw', ephemeral.publicKey));
+
+  // Pack: [65 bytes ephemeral public key][12 bytes IV][ciphertext]
+  const packed = new Uint8Array(65 + 12 + ciphertext.byteLength);
+  packed.set(ephPub, 0);
+  packed.set(iv, 65);
+  packed.set(new Uint8Array(ciphertext), 65 + 12);
+
+  return btoa(String.fromCharCode(...packed));
+}
+
+const input = document.getElementById('input');
+const encryptBtn = document.getElementById('encryptBtn');
+const copyBtn = document.getElementById('copyBtn');
+const resetBtn = document.getElementById('resetBtn');
+const buttons = document.querySelector('.buttons');
+
+encryptBtn.addEventListener('click', async () => {
+  const text = input.value.trim();
+  if (!text) return;
+
+  try {
+    const encrypted = await encrypt(text);
+    input.value = encrypted;
+    input.classList.add('encrypted');
+    input.readOnly = true;
+
+    encryptBtn.classList.add('hidden');
+    copyBtn.classList.add('visible');
+    resetBtn.classList.add('visible');
+    buttons.classList.add('split');
+  } catch (e) {
+    alert('Encryption failed. Is the public key set?');
+    console.error(e);
+  }
+});
+
+copyBtn.addEventListener('click', async () => {
+  await navigator.clipboard.writeText(input.value);
+  copyBtn.textContent = 'Copied!';
+  copyBtn.classList.add('copied');
+  setTimeout(() => {
+    copyBtn.textContent = 'Copy';
+    copyBtn.classList.remove('copied');
+  }, 1500);
+});
+
+resetBtn.addEventListener('click', () => {
+  input.value = '';
+  input.classList.remove('encrypted');
+  input.readOnly = false;
+
+  copyBtn.classList.remove('visible');
+  resetBtn.classList.remove('visible');
+  encryptBtn.classList.remove('hidden');
+  buttons.classList.remove('split');
+});
+</script>
+</body>
+</html>

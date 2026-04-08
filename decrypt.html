@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shooop SecureSend — Decrypt</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #09090b;
+    color: #a1a1aa;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 1.5rem;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 560px;
+  }
+
+  h1 {
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 1.25rem;
+    color: #a1a1aa;
+  }
+
+  label {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #71717a;
+    margin-bottom: 0.5rem;
+  }
+
+  .file-upload {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .file-upload label {
+    margin-bottom: 0;
+    padding: 0.5rem 1rem;
+    background: transparent;
+    border: 1px solid #3f3f46;
+    border-radius: 4px;
+    color: #d4d4d8;
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+  }
+
+  .file-upload label:hover {
+    border-color: #52525b;
+    color: #fafafa;
+  }
+
+  .file-upload input[type="file"] {
+    display: none;
+  }
+
+  .file-name {
+    font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.75rem;
+    color: #71717a;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .file-name.loaded {
+    color: #a1a1aa;
+  }
+
+  textarea {
+    display: block;
+    width: 100%;
+    background: transparent;
+    border: 1px solid #3f3f46;
+    border-radius: 4px;
+    color: #fafafa;
+    font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.85rem;
+    line-height: 1.7;
+    padding: 1.25rem;
+    resize: none;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+    transition: border-color 0.25s ease;
+  }
+
+  textarea::placeholder { color: #71717a; }
+  textarea:focus { border-color: #52525b; }
+
+
+  #input {
+    height: 240px;
+  }
+
+  #input.decrypted {
+    color: #fafafa;
+  }
+
+  #input.ciphertext {
+    color: #71717a;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    word-break: break-all;
+  }
+
+  .buttons {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    height: 40px;
+  }
+
+  button {
+    width: 100%;
+    height: 40px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    transition: all 0.15s ease;
+    color: #fafafa;
+  }
+
+  button:active { transform: scale(0.98); }
+
+  #decryptBtn {
+    background: #3f3f46;
+    color: #d4d4d8;
+  }
+
+  #decryptBtn:hover {
+    background: #52525b;
+  }
+
+  #resetBtn {
+    display: none;
+    background: transparent;
+    border-color: #3f3f46;
+    color: #d4d4d8;
+  }
+
+  #resetBtn.visible {
+    display: block;
+  }
+
+  #resetBtn:hover {
+    border-color: #52525b;
+    color: #fafafa;
+  }
+
+  #decryptBtn.hidden {
+    display: none;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>SecureSend — Decrypt</h1>
+  <label>Private Key</label>
+  <div class="file-upload">
+    <label for="privateKeyFile">Choose File</label>
+    <input type="file" id="privateKeyFile" accept=".pem,.key,.txt">
+    <span class="file-name" id="fileName">No file selected</span>
+  </div>
+  <label for="input">Encrypted Message</label>
+  <textarea id="input" placeholder="Paste the encrypted base64 text here..."></textarea>
+  <div class="buttons">
+    <button id="decryptBtn">Decrypt</button>
+    <button id="resetBtn">Reset</button>
+  </div>
+</div>
+
+<script>
+function pemToArrayBuffer(pem) {
+  const b64 = pem.replace(/-----[^-]+-----/g, '').replace(/\s/g, '');
+  const bin = atob(b64);
+  const buf = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  return buf.buffer;
+}
+
+async function importPrivateKey(pem) {
+  const der = pemToArrayBuffer(pem);
+  return crypto.subtle.importKey('pkcs8', der, { name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']);
+}
+
+async function importEphemeralPublicKey(rawBytes) {
+  return crypto.subtle.importKey('raw', rawBytes, { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+}
+
+async function deriveAesKey(privateKey, publicKey) {
+  const shared = await crypto.subtle.deriveBits({ name: 'ECDH', public: publicKey }, privateKey, 256);
+  return crypto.subtle.importKey('raw', shared, { name: 'AES-GCM' }, false, ['decrypt']);
+}
+
+async function decrypt(b64, privateKeyPem) {
+  const privKey = await importPrivateKey(privateKeyPem);
+
+  const bin = atob(b64.replace(/\s/g, ''));
+  const packed = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) packed[i] = bin.charCodeAt(i);
+
+  // Unpack: [65 bytes ephemeral public key][12 bytes IV][ciphertext]
+  const ephPubRaw = packed.slice(0, 65);
+  const iv = packed.slice(65, 65 + 12);
+  const ciphertext = packed.slice(65 + 12);
+
+  // Import ephemeral public key and derive AES key
+  const ephPubKey = await importEphemeralPublicKey(ephPubRaw);
+  const aesKey = await deriveAesKey(privKey, ephPubKey);
+
+  // Decrypt data with AES-GCM
+  const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, aesKey, ciphertext);
+
+  return new TextDecoder().decode(plaintext);
+}
+
+const fileInput = document.getElementById('privateKeyFile');
+const fileName = document.getElementById('fileName');
+const input = document.getElementById('input');
+const decryptBtn = document.getElementById('decryptBtn');
+const resetBtn = document.getElementById('resetBtn');
+
+let privateKeyPem = '';
+
+fileInput.addEventListener('change', () => {
+  const file = fileInput.files[0];
+  if (!file) return;
+  fileName.textContent = file.name;
+  fileName.classList.add('loaded');
+  const reader = new FileReader();
+  reader.onload = () => { privateKeyPem = reader.result.trim(); };
+  reader.readAsText(file);
+});
+
+decryptBtn.addEventListener('click', async () => {
+  if (!privateKeyPem) { alert('Please select a private key file.'); return; }
+  const text = input.value.trim();
+  if (!text) return;
+
+  try {
+    const decrypted = await decrypt(text, privateKeyPem);
+    input.value = decrypted;
+    input.classList.remove('ciphertext');
+    input.classList.add('decrypted');
+    input.readOnly = true;
+
+    decryptBtn.classList.add('hidden');
+    resetBtn.classList.add('visible');
+  } catch (e) {
+    alert('Decryption failed. Check your private key and encrypted text.');
+    console.error(e);
+  }
+});
+
+resetBtn.addEventListener('click', () => {
+  input.value = '';
+  input.classList.remove('decrypted', 'ciphertext');
+  input.readOnly = false;
+  privateKeyPem = '';
+  fileInput.value = '';
+  fileName.textContent = 'No file selected';
+  fileName.classList.remove('loaded');
+
+  resetBtn.classList.remove('visible');
+  decryptBtn.classList.remove('hidden');
+});
+</script>
+</body>
+</html>
