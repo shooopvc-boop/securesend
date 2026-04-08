@@ -132,27 +132,26 @@
   }
 
   #copyBtn {
-    background: transparent;
-    border-color: #3f3f46;
+    background: #3f3f46;
     color: #d4d4d8;
   }
   #copyBtn:hover {
-    border-color: #52525b;
+    background: #52525b;
     color: #fafafa;
   }
   #copyBtn.copied {
-    border-color: #3f3f46;
+    background: #27272a;
     color: #71717a;
   }
 
   #resetBtn {
     background: transparent;
     border-color: #3f3f46;
-    color: #d4d4d8;
+    color: #71717a;
   }
   #resetBtn:hover {
     border-color: #52525b;
-    color: #fafafa;
+    color: #a1a1aa;
   }
 </style>
 </head>
@@ -220,6 +219,7 @@ async function encrypt(plaintext) {
 }
 
 const input = document.getElementById('input');
+input.value = '';
 const encryptBtn = document.getElementById('encryptBtn');
 const copyBtn = document.getElementById('copyBtn');
 const resetBtn = document.getElementById('resetBtn');
