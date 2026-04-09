@@ -5,6 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SecureSend</title>
 <style>
+  @property --rainbow-angle {
+    syntax: '<angle>';
+    initial-value: 0deg;
+    inherits: false;
+  }
+
+  @keyframes rainbow-spin {
+    to { --rainbow-angle: 360deg; }
+  }
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   body {
@@ -96,14 +106,55 @@
   button:active { transform: scale(0.98); }
 
   #encryptBtn {
-    background: #3f3f46;
-    color: #d4d4d8;
+    background: transparent;
+    border-color: #3f3f46;
+    color: #a1a1aa;
     grid-column: 1 / -1;
     grid-row: 1;
+    position: relative;
+    z-index: 0;
+  }
+
+  #encryptBtn::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: 5px;
+    background: conic-gradient(
+      from var(--rainbow-angle),
+      #d4a0a7, #a0b4d4, #d4c8a0, #b4a0d4, #a0d4b8, #d4a0a7
+    );
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    z-index: -2;
+    animation: rainbow-spin 4s linear infinite;
+  }
+
+  #encryptBtn::after {
+    content: '';
+    position: absolute;
+    inset: 1px;
+    border-radius: 3px;
+    background: #09090b;
+    z-index: -1;
   }
 
   #encryptBtn:hover {
-    background: #52525b;
+    border-color: transparent;
+    color: #fafafa;
+  }
+
+  #encryptBtn:hover::before {
+    opacity: 1;
+  }
+
+  #encryptBtn.active {
+    border-color: transparent;
+    color: #fafafa;
+  }
+
+  #encryptBtn.active::before {
+    opacity: 1;
   }
 
   #copyBtn {
@@ -132,15 +183,48 @@
   }
 
   #copyBtn {
-    background: #3f3f46;
-    color: #d4d4d8;
+    background: transparent;
+    border-color: #3f3f46;
+    color: #a1a1aa;
+    position: relative;
+    z-index: 0;
   }
+
+  #copyBtn::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: 5px;
+    background: conic-gradient(
+      from var(--rainbow-angle),
+      #d4a0a7, #a0b4d4, #d4c8a0, #b4a0d4, #a0d4b8, #d4a0a7
+    );
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    z-index: -2;
+    animation: rainbow-spin 4s linear infinite;
+  }
+
+  #copyBtn::after {
+    content: '';
+    position: absolute;
+    inset: 1px;
+    border-radius: 3px;
+    background: #09090b;
+    z-index: -1;
+  }
+
   #copyBtn:hover {
-    background: #52525b;
+    border-color: transparent;
     color: #fafafa;
   }
+
+  #copyBtn:hover::before {
+    opacity: 1;
+  }
+
   #copyBtn.copied {
-    background: #27272a;
+    border-color: #27272a;
     color: #71717a;
   }
 
@@ -272,17 +356,20 @@ encryptBtn.addEventListener('click', async () => {
   if (!text) return;
 
   encryptBtn.disabled = true;
+  encryptBtn.classList.add('active');
 
   try {
     const encrypted = await encrypt(text);
 
     scrambleTo(encrypted, () => {
+      encryptBtn.classList.remove('active');
       encryptBtn.classList.add('hidden');
       copyBtn.classList.add('visible');
       resetBtn.classList.add('visible');
     });
   } catch (e) {
     encryptBtn.disabled = false;
+    encryptBtn.classList.remove('active');
     alert('Encryption failed. Is the public key set?');
     console.error(e);
   }

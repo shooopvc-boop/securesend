@@ -5,6 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SecureSend</title>
 <style>
+  @property --rainbow-angle {
+    syntax: '<angle>';
+    initial-value: 0deg;
+    inherits: false;
+  }
+
+  @keyframes rainbow-spin {
+    to { --rainbow-angle: 360deg; }
+  }
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   body {
@@ -70,14 +80,25 @@
   a::before {
     content: '';
     position: absolute;
-    inset: 0;
+    inset: -1px;
+    border-radius: 9px;
+    background: conic-gradient(
+      from var(--rainbow-angle),
+      #d4a0a7, #a0b4d4, #d4c8a0, #b4a0d4, #a0d4b8, #d4a0a7
+    );
     opacity: 0;
-    transition: opacity 0.3s ease;
-    border-radius: 8px;
+    transition: opacity 0.4s ease;
+    z-index: -1;
+    animation: rainbow-spin 4s linear infinite;
   }
 
-  a::before {
-    background: radial-gradient(ellipse at 50% 80%, rgba(161, 161, 170, 0.06) 0%, transparent 70%);
+  a::after {
+    content: '';
+    position: absolute;
+    inset: 1px;
+    border-radius: 7px;
+    background: #09090b;
+    z-index: -1;
   }
 
   a:hover::before {
@@ -85,13 +106,7 @@
   }
 
   a:hover {
-    border-color: #3f3f46;
-    color: #d4d4d8;
-  }
-
-  a.encrypt:hover,
-  a.decrypt:hover {
-    border-color: #52525b;
+    border-color: transparent;
     color: #fafafa;
   }
 
